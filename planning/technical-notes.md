@@ -167,11 +167,14 @@ After calling `add_node`, HA sends events on the same WebSocket:
 
 ## HA REST API Reference (for BE implementation)
 
+Verified against live HA instance (49 entities, 3 covers, 1 climate, 2 lights, 1 fan).
+
 ### Endpoints Used
 
-- `GET /api/` — health check
+- `GET /api/` — health check (returns `{"message": "API running."}`)
 - `GET /api/states` — all entity states
 - `GET /api/states/{entity_id}` — single entity state
+- `GET /api/services` — list available services with field schemas
 - `POST /api/services/{domain}/{service}` — call a service
 
 ### Cover Services
@@ -196,22 +199,34 @@ Content-Type: application/json
 }
 ```
 
-### Cover Entity State Shape
+### Cover Entity State Shape (from live HA)
 
 ```json
 {
   "entity_id": "cover.living_room_blinds",
-  "state": "open",
+  "state": "unavailable",
   "attributes": {
-    "friendly_name": "Living Room Blinds",
     "device_class": "blind",
-    "current_position": 75,
+    "friendly_name": "Living room blinds",
     "supported_features": 15
   },
-  "last_changed": "2026-05-07T22:15:00+00:00",
-  "last_updated": "2026-05-07T22:15:00+00:00"
+  "last_changed": "2026-05-07T11:04:49.812217+00:00",
+  "last_reported": "2026-05-07T11:04:59.136059+00:00",
+  "last_updated": "2026-05-07T11:04:59.135911+00:00",
+  "context": {
+    "id": "01KR11SFZY9JPDQW21M6SV05MS",
+    "parent_id": null,
+    "user_id": null
+  }
 }
 ```
+
+Notes from live testing:
+- `current_position` is **absent** when device is unavailable (not null, not 0 — the key doesn't exist)
+- `device_class` can be `blind` or `window` — filter by domain not device_class
+- Three timestamps: `last_changed`, `last_updated`, `last_reported`
+- `context.user_id` populated when a user triggers the action — useful for activity log
+- `supported_features` bitmask: OPEN=1, CLOSE=2, SET_POSITION=4, STOP=8, OPEN_TILT=16, CLOSE_TILT=32, STOP_TILT=64, SET_TILT_POSITION=128
 
 ### Authentication
 
