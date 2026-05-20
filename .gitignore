@@ -25,6 +25,12 @@ artemis_home_be-*.tar
 # BE-owned RSA signing keys never go in the repo.
 apps/*/priv/keys/*.pem
 
+# Local docker-compose env file with secrets. Use .env.example as the template.
+/.env
+
+# Host bind-mount target used by docker-compose for the session signing keys.
+/keys/
+
 # v0 planning material kept local.
 /planning/
 /temp/

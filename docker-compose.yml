@@ -1,0 +1,40 @@
+# Sample docker-compose.yml for a single home BE on Synology Container Manager,
+# Docker Desktop, or any other Compose-aware host.
+#
+# Usage:
+#   1. cp .env.example .env
+#   2. Fill in values in .env (DOCKER_USERNAME, secrets, hostnames, etc.)
+#   3. docker compose up -d
+#
+# `.env` is gitignored. Never commit it.
+#
+# Required vars use `${VAR:?message}` so docker compose errors at evaluation
+# time if they are unset or empty — the container never starts with a bad
+# configuration. Optional vars use `${VAR:-default}`.
+
+services:
+  artemis_home_be:
+    image: ${DOCKER_USERNAME:?DOCKER_USERNAME must be set}/artemis_home_be:${ARTEMIS_VERSION:-latest}
+    container_name: artemis_home_be
+    environment:
+      # Required — fetch_env! in :prod will also fail container boot if missing.
+      - HOME_ID=${HOME_ID:?HOME_ID must be set}
+      - PHX_HOST=${PHX_HOST:?PHX_HOST must be set}
+      - SECRET_KEY_BASE=${SECRET_KEY_BASE:?SECRET_KEY_BASE must be set (generate with mix phx.gen.secret)}
+      - AUTH0_DOMAIN=${AUTH0_DOMAIN:?AUTH0_DOMAIN must be set}
+      - AUTH0_M2M_CLIENT_ID=${AUTH0_M2M_CLIENT_ID:?AUTH0_M2M_CLIENT_ID must be set}
+      - AUTH0_M2M_CLIENT_SECRET=${AUTH0_M2M_CLIENT_SECRET:?AUTH0_M2M_CLIENT_SECRET must be set}
+      # Optional with defaults.
+      - AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-https://artemis.app/api}
+      - TZ=${TZ:-UTC}
+      - PORT=4000
+    ports:
+      # Map host port to the container's internal 4000. Change HOST_PORT in
+      # .env if you need to avoid a conflict on the host.
+      - "${HOST_PORT:-4000}:4000"
+    volumes:
+      # Persists the BE's RSA session signing key across container restarts.
+      # Without this, every session JWT issued before a restart instantly
+      # becomes invalid.
+      - ${KEYS_PATH:-./keys}:/app/apps/core/priv/keys
+    restart: unless-stopped
