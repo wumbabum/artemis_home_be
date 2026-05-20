@@ -5,6 +5,7 @@
   "skip_files": [
     "lib/core/application.ex",
     "lib/core/auth/jwks_cache/http_fetcher.ex",
+    "lib/core/auth/management_api/http_client.ex",
     "test/support/"
   ]
 }
