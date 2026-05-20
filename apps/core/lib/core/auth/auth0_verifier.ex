@@ -41,8 +41,6 @@ defmodule Core.Auth.Auth0Verifier do
       {:ok, _} -> {:error, :missing_kid}
       {:error, _} -> {:error, :invalid_token}
     end
-  rescue
-    _ -> {:error, :invalid_token}
   end
 
   defp jwk_to_pem(jwk_map) do

@@ -32,6 +32,17 @@ defmodule Core.Auth.Auth0TokenHelper do
     token
   end
 
+  @doc """
+  Signs claims using the keypair but emits a JWS header without a `kid` field.
+  Used to test the verifier's :missing_kid path.
+  """
+  @spec sign_without_kid(keypair(), map()) :: String.t()
+  def sign_without_kid(%{private_jwk: jwk}, claims) do
+    signer = Joken.Signer.create("RS256", %{"pem" => to_pem(jwk)})
+    {:ok, token, _claims} = Joken.encode_and_sign(claims, signer)
+    token
+  end
+
   defp to_pem(jwk) do
     {_, pem} = JOSE.JWK.to_pem(jwk)
     pem

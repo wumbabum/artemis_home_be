@@ -8,7 +8,9 @@ defmodule ArtemisHomeBe.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      test_coverage: [tool: ExCoveralls],
+      # threshold: 0 silences Mix's built-in 90% cover check; ExCoveralls is the
+      # authority on coverage via coveralls.json (minimum_coverage: 100).
+      test_coverage: [tool: ExCoveralls, threshold: 0],
       dialyzer: [
         plt_add_apps: [:ex_unit, :mix],
         ignore_warnings: ".dialyzer_ignore.exs"
@@ -48,8 +50,9 @@ defmodule ArtemisHomeBe.MixProject do
         "compile --force --warnings-as-errors",
         "credo --strict",
         "format --check-formatted",
-        # No --raise: v0 reports coverage without enforcing a threshold.
-        "coveralls --umbrella",
+        # --raise fails the suite when coverage drops below the threshold set
+        # in coveralls.json (minimum_coverage: 100 with skip_files for generated code).
+        "coveralls --umbrella --raise",
         "dialyzer --list-unused-filters"
       ],
       precommit: [

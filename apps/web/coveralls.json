@@ -8,7 +8,6 @@
     "lib/web/gettext.ex",
     "lib/web/router.ex",
     "lib/web/telemetry.ex",
-    "lib/core/application.ex",
-    "lib/core/auth/jwks_cache/http_fetcher.ex"
+    "test/support/"
   ]
 }

@@ -11,7 +11,8 @@ defmodule Dispatch.MixProject do
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      test_coverage: [tool: ExCoveralls, threshold: 0]
     ]
   end
 
