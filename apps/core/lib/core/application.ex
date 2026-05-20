@@ -8,8 +8,7 @@ defmodule Core.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: Core.Worker.start_link(arg)
-      # {Core.Worker, arg}
+      {Core.Auth.JwksCache, name: Core.Auth.JwksCache}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
