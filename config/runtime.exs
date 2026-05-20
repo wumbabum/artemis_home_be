@@ -1,5 +1,18 @@
 import Config
 
+# Read environment configuration shared across all envs.
+# Values are optional at config time; consuming modules raise if missing at use.
+config :core,
+  home_id: System.get_env("HOME_ID"),
+  auth0_domain: System.get_env("AUTH0_DOMAIN"),
+  auth0_audience: System.get_env("AUTH0_AUDIENCE"),
+  auth0_m2m_client_id: System.get_env("AUTH0_M2M_CLIENT_ID"),
+  auth0_m2m_client_secret: System.get_env("AUTH0_M2M_CLIENT_SECRET")
+
+if port = System.get_env("PORT") do
+  config :web, Web.Endpoint, http: [port: String.to_integer(port)]
+end
+
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
