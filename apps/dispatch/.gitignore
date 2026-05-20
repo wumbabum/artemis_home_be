@@ -10,21 +10,15 @@
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/
 
-# Ignore .fetch files in case you like to edit your project deps locally.
-/.fetch
+# Temporary files, for example, from tests.
+/tmp/
 
 # If the VM crashes, it generates a dump, let's ignore it too.
 erl_crash.dump
 
-# Also ignore archive artifacts (built via "mix hex.build").
+# Also ignore archive artifacts (built via "mix archive.build").
 *.ez
 
 # Ignore package tarball (built via "mix hex.build").
-artemis_home_be-*.tar
+dispatch-*.tar
 
-# BE-owned RSA signing keys never go in the repo.
-apps/*/priv/keys/*.pem
-
-# v0 planning material kept local.
-/planning/
-/temp/
