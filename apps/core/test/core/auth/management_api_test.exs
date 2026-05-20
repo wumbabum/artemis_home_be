@@ -86,6 +86,66 @@ defmodule Core.Auth.ManagementApiTest do
     end
   end
 
+  describe "get_app_metadata/1" do
+    test "returns the user's app_metadata when present" do
+      stub(HttpClientMock, :fetch_token, fn _domain, _id, _secret ->
+        {:ok, %{access_token: "tok", expires_in: 86_400}}
+      end)
+
+      stub(HttpClientMock, :get_user, fn "test.auth0.com", "tok", "auth0|user-1" ->
+        {:ok,
+         %{"user_id" => "auth0|user-1", "app_metadata" => %{"homes" => [%{"home_id" => "alpha"}]}}}
+      end)
+
+      assert {:ok, %{"homes" => [%{"home_id" => "alpha"}]}} =
+               ManagementApi.get_app_metadata("auth0|user-1")
+    end
+
+    test "returns an empty map when the user has no app_metadata" do
+      stub(HttpClientMock, :fetch_token, fn _domain, _id, _secret ->
+        {:ok, %{access_token: "tok", expires_in: 86_400}}
+      end)
+
+      stub(HttpClientMock, :get_user, fn _domain, _token, _sub ->
+        {:ok, %{"user_id" => "auth0|user-1"}}
+      end)
+
+      assert {:ok, %{}} = ManagementApi.get_app_metadata("auth0|user-1")
+    end
+
+    test "reuses the cached M2M token across get_app_metadata calls" do
+      test_pid = self()
+
+      stub(HttpClientMock, :fetch_token, fn _domain, _id, _secret ->
+        send(test_pid, :fetched_token)
+        {:ok, %{access_token: "tok", expires_in: 86_400}}
+      end)
+
+      stub(HttpClientMock, :get_user, fn _domain, _token, _sub ->
+        {:ok, %{"app_metadata" => %{}}}
+      end)
+
+      assert {:ok, _} = ManagementApi.get_app_metadata("auth0|user-1")
+      assert {:ok, _} = ManagementApi.get_app_metadata("auth0|user-2")
+
+      assert_received :fetched_token
+      refute_received :fetched_token
+    end
+
+    test "propagates errors from the user GET endpoint" do
+      stub(HttpClientMock, :fetch_token, fn _domain, _id, _secret ->
+        {:ok, %{access_token: "tok", expires_in: 86_400}}
+      end)
+
+      stub(HttpClientMock, :get_user, fn _domain, _token, _sub ->
+        {:error, {:http_status, 404, %{"error" => "Not Found"}}}
+      end)
+
+      assert {:error, {:http_status, 404, %{"error" => "Not Found"}}} =
+               ManagementApi.get_app_metadata("auth0|user-1")
+    end
+  end
+
   describe "error propagation" do
     test "propagates errors from the token endpoint" do
       stub(HttpClientMock, :fetch_token, fn _domain, _id, _secret ->

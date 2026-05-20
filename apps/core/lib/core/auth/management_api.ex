@@ -15,6 +15,8 @@ defmodule Core.Auth.ManagementApi do
   @callback update_app_metadata(user_sub :: String.t(), patch :: map()) ::
               {:ok, map()} | {:error, term()}
 
+  @callback get_app_metadata(user_sub :: String.t()) :: {:ok, map()} | {:error, term()}
+
   @behaviour __MODULE__
 
   @cache_key {__MODULE__, :m2m_token}
@@ -28,6 +30,20 @@ defmodule Core.Auth.ManagementApi do
     with {:ok, domain} <- fetch_config(:auth0_domain),
          {:ok, token} <- fetch_or_refresh_token(domain) do
       http_client().patch_user(domain, token, user_sub, %{"app_metadata" => patch})
+    end
+  end
+
+  @doc """
+  Fetches the user's `app_metadata` from Auth0. Returns an empty map when
+  Auth0 returns the user but no `app_metadata` key is present.
+  """
+  @impl true
+  @spec get_app_metadata(String.t()) :: {:ok, map()} | {:error, term()}
+  def get_app_metadata(user_sub) when is_binary(user_sub) do
+    with {:ok, domain} <- fetch_config(:auth0_domain),
+         {:ok, token} <- fetch_or_refresh_token(domain),
+         {:ok, user} <- http_client().get_user(domain, token, user_sub) do
+      {:ok, Map.get(user, "app_metadata", %{})}
     end
   end
 

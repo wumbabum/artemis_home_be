@@ -28,6 +28,12 @@ defmodule Core.Auth.ManagementApi.HttpClient do
               body :: map()
             ) :: {:ok, map()} | {:error, term()}
 
+  @callback get_user(
+              domain :: String.t(),
+              token :: String.t(),
+              user_sub :: String.t()
+            ) :: {:ok, map()} | {:error, term()}
+
   @behaviour __MODULE__
 
   @impl true
@@ -62,7 +68,7 @@ defmodule Core.Auth.ManagementApi.HttpClient do
   @impl true
   def patch_user(domain, token, user_sub, body)
       when is_binary(domain) and is_binary(token) and is_binary(user_sub) and is_map(body) do
-    url = "https://" <> domain <> "/api/v2/users/" <> URI.encode_www_form(user_sub)
+    url = user_url(domain, user_sub)
     headers = [{"authorization", "Bearer " <> token}]
 
     case Req.patch(url, json: body, headers: headers) do
@@ -75,5 +81,30 @@ defmodule Core.Auth.ManagementApi.HttpClient do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  @impl true
+  def get_user(domain, token, user_sub)
+      when is_binary(domain) and is_binary(token) and is_binary(user_sub) do
+    url = user_url(domain, user_sub)
+    headers = [{"authorization", "Bearer " <> token}]
+
+    case Req.get(url, headers: headers) do
+      {:ok, %{status: 200, body: response_body}} when is_map(response_body) ->
+        {:ok, response_body}
+
+      {:ok, %{status: 200, body: _malformed}} ->
+        {:error, :malformed_user_response}
+
+      {:ok, %{status: status, body: response_body}} ->
+        {:error, {:http_status, status, response_body}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp user_url(domain, user_sub) do
+    "https://" <> domain <> "/api/v2/users/" <> URI.encode_www_form(user_sub)
   end
 end

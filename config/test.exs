@@ -12,6 +12,12 @@ config :core, :jwks_fetcher, Core.Auth.JwksCache.HttpFetcherMock
 config :core, :jwks_cache, Core.Auth.JwksCacheMock
 config :core, :management_api_http_client, Core.Auth.ManagementApi.HttpClientMock
 
+# Core.Auth picks its collaborators by config so it can be unit-tested with
+# Mox while the real implementations remain testable directly.
+config :core, :auth0_verifier, Core.Auth.Auth0VerifierMock
+config :core, :session_token, Core.Auth.SessionTokenMock
+config :core, :management_api, Core.Auth.ManagementApiMock
+
 # Test defaults for env-driven settings normally provided at runtime.
 config :core,
   home_id: "test_home",
