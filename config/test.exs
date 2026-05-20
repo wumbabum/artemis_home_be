@@ -9,3 +9,10 @@ config :web, Web.Endpoint,
 
 # Swap external dependencies for Mox-backed mocks during tests.
 config :core, :jwks_fetcher, Core.Auth.JwksCache.HttpFetcherMock
+config :core, :jwks_cache, Core.Auth.JwksCacheMock
+
+# Test defaults for env-driven settings normally provided at runtime.
+config :core,
+  home_id: "test_home",
+  auth0_domain: "test.auth0.com",
+  auth0_audience: "https://artemis.app/api"

@@ -1,13 +1,20 @@
 import Config
 
 # Read environment configuration shared across all envs.
-# Values are optional at config time; consuming modules raise if missing at use.
-config :core,
-  home_id: System.get_env("HOME_ID"),
-  auth0_domain: System.get_env("AUTH0_DOMAIN"),
-  auth0_audience: System.get_env("AUTH0_AUDIENCE"),
-  auth0_m2m_client_id: System.get_env("AUTH0_M2M_CLIENT_ID"),
-  auth0_m2m_client_secret: System.get_env("AUTH0_M2M_CLIENT_SECRET")
+# Only write to :core when the env var is actually set, so that test.exs
+# defaults are preserved during `mix test` (when these env vars are absent).
+if home_id = System.get_env("HOME_ID"), do: config(:core, home_id: home_id)
+
+if domain = System.get_env("AUTH0_DOMAIN"), do: config(:core, auth0_domain: domain)
+
+if audience = System.get_env("AUTH0_AUDIENCE"),
+  do: config(:core, auth0_audience: audience)
+
+if client_id = System.get_env("AUTH0_M2M_CLIENT_ID"),
+  do: config(:core, auth0_m2m_client_id: client_id)
+
+if client_secret = System.get_env("AUTH0_M2M_CLIENT_SECRET"),
+  do: config(:core, auth0_m2m_client_secret: client_secret)
 
 if port = System.get_env("PORT") do
   config :web, Web.Endpoint, http: [port: String.to_integer(port)]
