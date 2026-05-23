@@ -19,7 +19,7 @@ case config_env() do
       auth0_m2m_client_id: System.get_env("AUTH0_M2M_CLIENT_ID"),
       auth0_m2m_client_secret: System.get_env("AUTH0_M2M_CLIENT_SECRET")
 
-    port = "PORT" |> System.get_env("4000") |> String.to_integer()
+    port = "PORT" |> System.get_env("6565") |> String.to_integer()
     config :web, Web.Endpoint, http: [port: port]
 
   :prod ->
@@ -32,7 +32,7 @@ case config_env() do
       auth0_m2m_client_id: System.fetch_env!("AUTH0_M2M_CLIENT_ID"),
       auth0_m2m_client_secret: System.fetch_env!("AUTH0_M2M_CLIENT_SECRET")
 
-    port = "PORT" |> System.get_env("4000") |> String.to_integer()
+    port = "PORT" |> System.get_env("6565") |> String.to_integer()
 
     config :web, Web.Endpoint,
       http: [port: port],

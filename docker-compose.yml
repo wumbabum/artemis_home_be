@@ -27,11 +27,11 @@ services:
       # Optional with defaults.
       - AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-https://artemis.app/api}
       - TZ=${TZ:-UTC}
-      - PORT=4000
+      - PORT=6565
     ports:
-      # Map host port to the container's internal 4000. Change HOST_PORT in
+      # Map host port to the container's internal 6565. Change HOST_PORT in
       # .env if you need to avoid a conflict on the host.
-      - "${HOST_PORT:-4000}:4000"
+      - "${HOST_PORT:-6565}:6565"
     volumes:
       # Persists the BE's RSA session signing key across container restarts.
       # Without this, every session JWT issued before a restart instantly
