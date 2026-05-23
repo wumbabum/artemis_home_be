@@ -1,5 +1,14 @@
 # Technical Design: Artemis Home
 
+> **Schema model:** single-home per BE. Each `artemis_home_be` instance
+> serves exactly one home; multi-home is a frontend concept (the FE
+> fans out HTTP calls across N BEs based on the Auth0
+> `app_metadata.homes` claim). The §Data Models section below reflects
+> this. The pre-v0.1 multi-home schema (with `homes`, `home_memberships`,
+> `home_id` foreign keys) is preserved in git history at the v0
+> commit. See `planning/smart-blinds/plan.md` for the v0.1 milestone
+> that introduces this schema.
+
 ## System Architecture
 
 ```
@@ -42,11 +51,18 @@
 
 ### Component Responsibilities
 
-**artemis_home_be (Port 4000) — Umbrella App**
+**artemis_home_be (Port 6565) — Umbrella App, one instance per home**
+
+Each deployment of `artemis_home_be` serves exactly one home; the home
+is identified by env var (`HOME_ID`) and connects to one Home
+Assistant instance (`HA_BASE_URL`, `HA_TOKEN`). Multi-home is the
+frontend's job — the React FE issues HTTP calls in parallel across
+the BE instances listed in the Auth0 user's `app_metadata.homes`
+claim.
 
 Four child apps under `apps/`:
 
-- **`:core`** — Business logic, Ecto schemas, contexts, validations. Owns all data models (users, rooms, devices, schedules, guest keys, PATs, configurations). No web dependencies. All other apps depend on this.
+- **`:core`** — Business logic, Ecto schemas, contexts, validations. Owns all data models (users, devices, schedules, PATs, configurations). No web dependencies. All other apps depend on this.
 - **`:dispatch`** — Oban job scheduling and execution. Schedule workers that load configs from `:core` and execute actions via `:core`'s HA client interface. Isolated so job processing concerns don't bleed into web or MCP.
 - **`:mcp`** — MCP JSON-RPC protocol handler. Translates MCP `tools/list` and `tools/call` requests into `:core` context calls. Authenticated via PATs. Can run as a plug pipeline or a separate endpoint.
 - **`:web`** — Phoenix JSON API. Controllers, channels, plugs, router. Thin layer that validates HTTP input, calls `:core` contexts, and returns JSON. Hosts Phoenix Channels for real-time state broadcasting.
@@ -63,32 +79,16 @@ Four child apps under `apps/`:
 
 ## Data Models
 
-All schemas live in the `:core` app.
+All schemas live in the `:core` app. Each BE serves exactly one home,
+so there is no `homes` table, no `home_memberships`, and no `home_id`
+foreign key on any device or schedule table. The home's identity is
+the BE itself.
 
-### homes
-```
-id              BIGSERIAL PRIMARY KEY
-name            VARCHAR NOT NULL          -- "Main House", "Lake House"
-ha_base_url     VARCHAR NOT NULL          -- "http://homeassistant:8123"
-ha_token_enc    VARCHAR NOT NULL          -- encrypted HA long-lived access token
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
+### v0.1 minimum schema
 
-### users
-```
-id              BIGSERIAL PRIMARY KEY
-auth0_sub       VARCHAR UNIQUE NOT NULL
-email           VARCHAR NOT NULL
-name            VARCHAR NOT NULL
-picture         VARCHAR
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
+v0.1 ships only the following tables.
 
-Note: no `role` column on users. Roles are per-home via `home_memberships`.
-
-### roles
+#### roles
 ```
 id              BIGSERIAL PRIMARY KEY
 name            VARCHAR UNIQUE NOT NULL   -- 'admin', 'resident', 'guest'
@@ -99,181 +99,82 @@ updated_at      TIMESTAMP NOT NULL
 
 Seeded on app startup with at least: `admin`, `resident`, `guest`.
 
-### home_memberships
+#### users
 ```
 id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
-user_id         BIGINT REFERENCES users(id) NOT NULL
-role_id         BIGINT REFERENCES roles(id) NOT NULL
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-
-UNIQUE (home_id, user_id)
-```
-
-### invitations
-```
-id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
+auth0_sub       VARCHAR UNIQUE NOT NULL    -- e.g. "google-oauth2|117394610565503842179"
 email           VARCHAR NOT NULL
-role_id         BIGINT REFERENCES roles(id) NOT NULL
-token           VARCHAR UNIQUE NOT NULL   -- URL-safe invite token
-invited_by_id   BIGINT REFERENCES users(id) NOT NULL
-accepted_at     TIMESTAMP
-expires_at      TIMESTAMP NOT NULL
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
-
-### rooms
-```
-id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
-name            VARCHAR NOT NULL          -- "Main Bedroom", "Living Room"
-outline         JSONB                     -- room outline for graphical view (see below)
-sort_order      INTEGER NOT NULL DEFAULT 0
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
-
-Outline format (JSONB): list of line segments for rendering an SVG room shape.
-```json
-{
-  "width": 400,
-  "height": 300,
-  "paths": [
-    {"type": "rect", "x": 0, "y": 0, "w": 400, "h": 300},
-    {"type": "line", "x1": 100, "y1": 0, "x2": 100, "y2": 50, "label": "window"}
-  ]
-}
-```
-Exact format TBD — needs UI prototyping. Could also be raw SVG path data.
-
-### blinds
-```
-id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
-room_id         BIGINT REFERENCES rooms(id)  -- nullable (may not be assigned to a room yet)
-name            VARCHAR NOT NULL          -- "Left Window Blind"
-ha_entity_id    VARCHAR NOT NULL UNIQUE   -- "cover.living_room_left"
-position_x      FLOAT                     -- x position on room outline (0.0-1.0 normalized)
-position_y      FLOAT                     -- y position on room outline (0.0-1.0 normalized)
-manufacturer    VARCHAR                   -- "SmartWings"
-protocol        VARCHAR                   -- "zwave"
-sort_order      INTEGER NOT NULL DEFAULT 0
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
-
-Future device tables follow the same pattern with type-specific columns:
-- `locks` — home_id, name, ha_entity_id, supports_codes, max_codes, ...
-- `lights` — home_id, name, ha_entity_id, supports_brightness, supports_rgb, ...
-- `thermostats` — home_id, name, ha_entity_id, supports_heat, supports_cool, min_temp, max_temp, ...
-- `garage_doors` — home_id, name, ha_entity_id, auto_close_timeout_minutes, ...
-
-No generic `devices` table. Each type is a first-class schema. Cross-type references
-(saved_configurations, schedules) use `{"type": "blind", "id": 1}` in their JSONB actions.
-
-### user_preferences
-```
-id              BIGSERIAL PRIMARY KEY
-user_id         BIGINT REFERENCES users(id) NOT NULL UNIQUE
-default_home_id BIGINT REFERENCES homes(id)
-theme           VARCHAR NOT NULL DEFAULT 'light'  -- 'light', 'dark'
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
-
-### activity_log
-```
-id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
-user_id         BIGINT REFERENCES users(id)  -- nullable for system/schedule actions
-device_type     VARCHAR NOT NULL          -- 'blind', 'lock', etc.
-device_id       BIGINT NOT NULL           -- FK to the type-specific table
-action          VARCHAR NOT NULL          -- 'open', 'close', 'unlock', 'set_position'
-details         JSONB                     -- action-specific details (e.g., {"position": 50})
-source          VARCHAR NOT NULL          -- 'user', 'schedule', 'mcp', 'guest'
-inserted_at     TIMESTAMP NOT NULL
-```
-
-### saved_configurations
-```
-id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
-name            VARCHAR NOT NULL          -- "Movie Mode", "Morning Open"
-actions         JSONB NOT NULL            -- list of device actions
-user_id         BIGINT REFERENCES users(id) NOT NULL
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
-
-`actions` format:
-```json
-[
-  {"type": "blind", "id": 1, "action": "set_position", "position": 20},
-  {"type": "blind", "id": 2, "action": "close"},
-  {"type": "blind", "id": 5, "action": "set_position", "position": 40}
-]
-```
-
-### guest_keys
-```
-id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
-token           VARCHAR UNIQUE NOT NULL
-label           VARCHAR NOT NULL
-allowed_scopes  JSONB NOT NULL           -- e.g. ["door:control"]
-expires_at      TIMESTAMP
-revoked_at      TIMESTAMP
-created_by_id   BIGINT REFERENCES users(id)
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
-
-### personal_access_tokens
-```
-id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
-token_hash      VARCHAR UNIQUE NOT NULL  -- SHA-256 hash of the token
-label           VARCHAR NOT NULL
-scopes          JSONB NOT NULL           -- e.g. ["devices:read", "devices:control"]
-user_id         BIGINT REFERENCES users(id) NOT NULL
-expires_at      TIMESTAMP
-revoked_at      TIMESTAMP
-last_used_at    TIMESTAMP
-inserted_at     TIMESTAMP NOT NULL
-updated_at      TIMESTAMP NOT NULL
-```
-
-### blind_schedules
-```
-id              BIGSERIAL PRIMARY KEY
-home_id         BIGINT REFERENCES homes(id) NOT NULL
 name            VARCHAR NOT NULL
-blind_ids       JSONB NOT NULL           -- [1, 2, 5] (references blinds.id)
-action          VARCHAR NOT NULL          -- "open", "close", "set_position"
-position        INTEGER                   -- 0-100, only for set_position
-cron_expression VARCHAR NOT NULL          -- "0 7 * * *" or similar
-timezone        VARCHAR NOT NULL          -- "America/Chicago"
-active          BOOLEAN NOT NULL DEFAULT true
-user_id         BIGINT REFERENCES users(id) NOT NULL
+picture         VARCHAR
+role_id         BIGINT REFERENCES roles(id) NOT NULL
 inserted_at     TIMESTAMP NOT NULL
 updated_at      TIMESTAMP NOT NULL
 ```
 
-Future device types get their own schedule tables: `light_schedules`, `thermostat_schedules`, etc.
+Every row in `users` is implicitly a member of this BE's home. Role
+is carried directly on the user — there is no `home_memberships`
+table. First-user-becomes-admin is handled by a `SEED_ADMIN_AUTH0_SUB`
+env var read at boot.
 
-### blind_schedule_runs
+#### blinds
 ```
 id              BIGSERIAL PRIMARY KEY
-blind_schedule_id BIGINT REFERENCES blind_schedules(id) NOT NULL
-status          VARCHAR NOT NULL          -- "success", "failure", "partial"
-started_at      TIMESTAMP NOT NULL
-completed_at    TIMESTAMP
-error_details   TEXT
-results         JSONB                     -- per-blind results
+name            VARCHAR NOT NULL           -- "Left Window Blind"
+ha_entity_id    VARCHAR UNIQUE NOT NULL    -- "cover.living_room_tv_right_outbound_bottom"
+manufacturer    VARCHAR                    -- "SmartWings"
+protocol        VARCHAR                    -- "zwave"
+sort_order      INTEGER NOT NULL DEFAULT 0
+inserted_at     TIMESTAMP NOT NULL
+updated_at      TIMESTAMP NOT NULL
 ```
+
+Future device tables follow the same shape (no `home_id`, optional
+`room_id` once rooms land):
+- `locks` — name, ha_entity_id, supports_codes, max_codes, ...
+- `lights` — name, ha_entity_id, supports_brightness, supports_rgb, ...
+- `thermostats` — name, ha_entity_id, supports_heat, supports_cool, min_temp, max_temp, ...
+- `garage_doors` — name, ha_entity_id, auto_close_timeout_minutes, ...
+
+No generic `devices` table. Each type is a first-class schema.
+
+### Connection config (not in DB)
+
+The Home Assistant base URL and long-lived access token live in env
+vars (`HA_BASE_URL`, `HA_TOKEN`) rather than a `homes` row. They are
+read once at boot and injected into the HA REST client. Plaintext at
+rest in v0.1; encryption deferred (HA is local-network only).
+
+### Tables deferred to later milestones
+
+- `rooms` (with outline JSONB) — v0.2+, when the FE has an outline
+  view. v0.1 renders blinds as a flat list.
+- `invitations` — when the FE has a "manage members" page. Until
+  then, admins create users via a direct admin endpoint or by
+  setting `SEED_ADMIN_AUTH0_SUB`.
+- `blind_schedules`, `blind_schedule_runs` — when scheduling lands
+  (Oban worker + GenServer evaluator).
+- `saved_configurations` — named multi-blind presets.
+- `activity_log` — added cross-cutting after multiple device types
+  exist.
+- `personal_access_tokens` — when MCP server lands.
+
+### Shape of future tables (no `home_id` anywhere)
+
+When the deferred tables land, none of them carry a `home_id` — each
+row exists in the BE that owns that home. Column lists below are
+illustrative; the precise schema lands with each milestone.
+
+- `activity_log(id, user_id, device_type, device_id, action, details JSONB, source, inserted_at)`
+- `saved_configurations(id, name, actions JSONB, user_id, inserted_at, updated_at)`
+- `blind_schedules(id, name, blind_ids JSONB, action, position, cron_expression, timezone, active, user_id, ...)`
+- `blind_schedule_runs(id, blind_schedule_id, status, started_at, completed_at, error_details, results JSONB)`
+- `guest_keys(id, token, label, allowed_scopes JSONB, expires_at, revoked_at, created_by_id, ...)`
+- `personal_access_tokens(id, token_hash, label, scopes JSONB, user_id, expires_at, revoked_at, last_used_at, ...)`
+- `user_preferences(id, user_id UNIQUE, theme, inserted_at, updated_at)` — no `default_home_id`; the FE picks the active home and stores that preference itself.
+
+Future device types follow the same single-home-per-BE pattern: their
+type-specific schedule table is `light_schedules`, `thermostat_schedules`,
+etc., still no `home_id`.
 
 ## Auth Flow
 
@@ -360,12 +261,6 @@ artemis_home_be/
 │   │       │   ├── accounts.ex          # Context: upsert_user, get_user
 │   │       │   └── user.ex             # Ecto schema
 │   │       │
-│   │       ├── tenancy/
-│   │       │   ├── tenancy.ex           # Context: homes CRUD, membership, invitations
-│   │       │   ├── home.ex             # Ecto schema
-│   │       │   ├── home_membership.ex   # Ecto schema
-│   │       │   └── invitation.ex       # Ecto schema
-│   │       │
 │   │       ├── auth/
 │   │       │   ├── auth.ex              # Context: verify_token, create_session
 │   │       │   ├── auth0_client.ex      # Auth0 code exchange, JWKS verification
@@ -374,18 +269,15 @@ artemis_home_be/
 │   │       │   ├── pat.ex              # Ecto schema
 │   │       │   └── pats.ex             # Context: create, validate, revoke
 │   │       │
-│   │       ├── home/
-│   │       │   ├── home_context.ex      # Context: rooms CRUD, saved configs
-│   │       │   ├── room.ex             # Ecto schema
-│   │       │   ├── saved_config.ex     # Ecto schema (named configurations)
-│   │       │   └── ha_client.ex        # Req-based HA REST API client (generic)
+│   │       ├── ha/
+│   │       │   ├── rest_client.ex      # Behaviour for HA REST API calls
+│   │       │   └── rest_client/
+│   │       │       └── http_fetcher.ex # Default impl (Req-based)
 │   │       │
 │   │       ├── blinds/
-│   │       │   ├── blinds.ex           # Context: blinds CRUD, control
+│   │       │   ├── blinds.ex           # Context: CRUD + open/close/set_position/stop
 │   │       │   ├── blind.ex            # Ecto schema
-│   │       │   ├── blind_schedules.ex  # Context: schedule CRUD, toggle, history
-│   │       │   ├── blind_schedule.ex   # Ecto schema
-│   │       │   └── blind_schedule_run.ex # Ecto schema
+│   │       │   └── state_cache.ex      # GenServer + ETS, polls HA, adaptive cadence
 │   │       │
 │   │       ├── activity/
 │   │       │   ├── activity.ex          # Context: log actions, query history
@@ -418,7 +310,6 @@ artemis_home_be/
 │           ├── router.ex
 │           ├── controllers/
 │           │   ├── auth_controller.ex
-│           │   ├── home_controller.ex     # Homes CRUD, membership, invitations
 │           │   ├── blind_controller.ex    # Blinds CRUD + control
 │           │   ├── room_controller.ex
 │           │   ├── config_controller.ex  # Saved configurations
@@ -686,8 +577,29 @@ volumes:
 
 ## Open Design Questions
 
-1. **FE-to-BE auth token flow**: The FE calls the BE via Req. How does the FE authenticate? Must resolve before starting. Options: BE issues a signed token after Auth0 verification, FE stores it in session, passes as Bearer header in Req calls. Or distributed Erlang eliminates this.
+1. **HA polling vs WebSocket for BE→HA**: v0.1 polls HA states via
+   REST. HA also has a WebSocket API that pushes `state_changed`
+   events. WebSocket is better for latency but adds complexity. Defer
+   to v0.3+.
 
-2. **Auth0 token handling in FE**: The FE could store the Auth0 access token and pass it to the BE on every request (stateless), or the BE could issue its own session token after verifying Auth0 (stateful). Stateful sessions (BE-issued) are simpler for LiveView since LiveView doesn't naturally carry Bearer tokens — it uses cookies.
+2. **Per-device sort ordering source of truth**: The DB has
+   `sort_order` but the FE will likely want drag-to-reorder. Decide
+   whether the FE writes back the new sort order or the BE assigns
+   it on insert and lets the FE re-render.
 
-3. **HA polling vs WebSocket for BE→HA**: v1 polls HA states via REST. HA also has a WebSocket API that pushes state_changed events. WebSocket is better for latency but adds complexity. Defer to v2.
+3. **Multi-instance BE deployment story on Synology.** Two BEs (alpha
+   + beta) on one Synology box need separate Postgres databases and
+   separate `KEYS_PATH` mounts. The current docker-compose template
+   assumes a single instance; multi-instance Compose layout is
+   deferred until we actually deploy two homes simultaneously.
+
+### Resolved (previously open)
+
+- **FE-to-BE auth token flow** — Resolved in v0. BE issues an RS256
+  session JWT after verifying the Auth0 access token; FE stores it
+  in memory and forwards it as `Authorization: Bearer <jwt>` on
+  every API call. See `planning/v0_docs/implementation-plan.md`.
+- **Auth0 token handling in FE** — Resolved in v0. FE keeps the
+  Auth0 access token in memory (`@auth0/auth0-react` SDK), uses it
+  only for `POST /api/sessions` to exchange for the BE session JWT,
+  then forgets it. See `artemis_home_fe/planning/v0_docs/implementation-plan.md`.
