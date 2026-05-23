@@ -28,6 +28,9 @@ apps/*/priv/keys/*.pem
 # Local docker-compose env file with secrets. Use .env.example as the template.
 /.env
 
+# Local direnv config with secrets. Use .envrc.example as the template.
+/.envrc
+
 # Host bind-mount target used by docker-compose for the session signing keys.
 /keys/
 
