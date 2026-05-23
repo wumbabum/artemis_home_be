@@ -38,12 +38,18 @@ defmodule Web.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      # Umbrella siblings
+      {:core, in_umbrella: true},
+      # Runtime
       {:phoenix, "~> 1.8.3"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
-      {:plug_cowboy, "~> 2.7"}
+      {:plug_cowboy, "~> 2.7"},
+      # Test
+      {:mox, "~> 1.1", only: :test},
+      {:excoveralls, "~> 0.18", only: :test}
     ]
   end
 
