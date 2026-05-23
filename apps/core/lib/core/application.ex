@@ -8,6 +8,7 @@ defmodule Core.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      Core.Repo,
       {Core.Auth.JwksCache, name: Core.Auth.JwksCache}
     ]
 

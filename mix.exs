@@ -46,7 +46,15 @@ defmodule ArtemisHomeBe.MixProject do
 
   defp aliases do
     [
+      # ecto.setup creates the DB and runs all pending migrations. Run
+      # this once locally after cloning, or after `ecto.reset`.
+      "ecto.setup": ["ecto.create", "ecto.migrate"],
+      "ecto.reset": ["ecto.drop", "ecto.setup"],
       all_tests: [
+        # Ensure the test DB exists and is at the latest migration before
+        # tests run. Both commands are idempotent.
+        "ecto.create --quiet",
+        "ecto.migrate --quiet",
         "compile --force --warnings-as-errors",
         "credo --strict",
         "format --check-formatted",

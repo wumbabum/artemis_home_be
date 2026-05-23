@@ -9,6 +9,8 @@
 # move said applications out of the umbrella.
 import Config
 
+config :core, ecto_repos: [Core.Repo]
+
 config :web,
   generators: [context_app: false]
 

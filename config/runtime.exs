@@ -30,6 +30,12 @@ case config_env() do
 
     config :web, :cors_allowed_origins, cors_origins
 
+    # DATABASE_URL is optional in dev; defaults fall back to dev.exs's
+    # username/password/hostname/database. Override only when needed.
+    if database_url = System.get_env("DATABASE_URL") do
+      config :core, Core.Repo, url: database_url
+    end
+
   :prod ->
     # Prod is strict: any missing required env var fails container startup.
     # We want misconfigured deployments to fail loud and fast at boot.
@@ -55,4 +61,9 @@ case config_env() do
       |> Enum.map(&String.trim/1)
 
     config :web, :cors_allowed_origins, cors_origins
+
+    config :core, Core.Repo,
+      url: System.fetch_env!("DATABASE_URL"),
+      pool_size: String.to_integer(System.get_env("DB_POOL_SIZE", "10")),
+      socket_options: [:inet6]
 end

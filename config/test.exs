@@ -1,5 +1,15 @@
 import Config
 
+# Core.Repo test config. Sandbox pool: each test runs in its own
+# transaction and rolls back on exit, keeping tests isolated.
+config :core, Core.Repo,
+  username: "postgres",
+  password: "",
+  hostname: "localhost",
+  database: "artemis_home_be_test",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: System.schedulers_online() * 2
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :web, Web.Endpoint,
