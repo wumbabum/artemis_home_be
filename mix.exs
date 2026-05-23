@@ -59,7 +59,10 @@ defmodule ArtemisHomeBe.MixProject do
         "compile --warnings-as-errors",
         "format --check-formatted",
         "test"
-      ]
+      ],
+      # Convenience alias so the task can be invoked with the dotted name
+      # `mix seed.homes` in addition to the underscored `mix seed_homes`.
+      "seed.homes": "seed_homes"
     ]
   end
 end
