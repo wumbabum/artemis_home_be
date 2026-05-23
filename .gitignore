@@ -32,5 +32,4 @@ apps/*/priv/keys/*.pem
 /keys/
 
 # v0 planning material kept local.
-/planning/
 /temp/
