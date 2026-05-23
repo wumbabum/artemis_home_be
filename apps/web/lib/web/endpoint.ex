@@ -44,5 +44,12 @@ defmodule Web.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+
+  # CORS must be evaluated before the router so OPTIONS preflight
+  # requests for unmatched routes still return the correct headers.
+  plug CORSPlug,
+    origin: &Web.Cors.origins/1,
+    methods: ~w(GET POST PUT PATCH DELETE OPTIONS)
+
   plug Web.Router
 end

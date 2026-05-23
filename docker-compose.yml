@@ -24,6 +24,7 @@ services:
       - AUTH0_DOMAIN=${AUTH0_DOMAIN:?AUTH0_DOMAIN must be set}
       - AUTH0_M2M_CLIENT_ID=${AUTH0_M2M_CLIENT_ID:?AUTH0_M2M_CLIENT_ID must be set}
       - AUTH0_M2M_CLIENT_SECRET=${AUTH0_M2M_CLIENT_SECRET:?AUTH0_M2M_CLIENT_SECRET must be set}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS must be set (comma-separated FE origins)}
       # Optional with defaults.
       - AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-https://artemis.app/api}
       - TZ=${TZ:-UTC}

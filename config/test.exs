@@ -25,3 +25,5 @@ config :core,
   auth0_audience: "https://artemis.app/api",
   auth0_m2m_client_id: "test_m2m_client_id",
   auth0_m2m_client_secret: "test_m2m_client_secret"
+
+config :web, :cors_allowed_origins, ["http://localhost:6587"]

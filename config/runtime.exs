@@ -22,6 +22,14 @@ case config_env() do
     port = "PORT" |> System.get_env("6565") |> String.to_integer()
     config :web, Web.Endpoint, http: [port: port]
 
+    cors_origins =
+      "CORS_ALLOWED_ORIGINS"
+      |> System.get_env("http://localhost:6587")
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+
+    config :web, :cors_allowed_origins, cors_origins
+
   :prod ->
     # Prod is strict: any missing required env var fails container startup.
     # We want misconfigured deployments to fail loud and fast at boot.
@@ -39,4 +47,12 @@ case config_env() do
       url: [host: System.fetch_env!("PHX_HOST"), port: 443, scheme: "https"],
       secret_key_base: System.fetch_env!("SECRET_KEY_BASE"),
       server: true
+
+    cors_origins =
+      "CORS_ALLOWED_ORIGINS"
+      |> System.fetch_env!()
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+
+    config :web, :cors_allowed_origins, cors_origins
 end

@@ -47,6 +47,7 @@ defmodule Web.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:plug_cowboy, "~> 2.7"},
+      {:cors_plug, "~> 3.0"},
       # Test
       {:mox, "~> 1.1", only: :test},
       {:excoveralls, "~> 0.18", only: :test}
