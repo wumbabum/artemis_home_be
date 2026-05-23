@@ -1,0 +1,13 @@
+{
+  "coverage_options": {
+    "minimum_coverage": 100
+  },
+  "skip_files": [
+    "lib/web/application.ex",
+    "lib/web/endpoint.ex",
+    "lib/web/gettext.ex",
+    "lib/web/router.ex",
+    "lib/web/telemetry.ex",
+    "test/support/"
+  ]
+}

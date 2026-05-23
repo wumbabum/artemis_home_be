@@ -1,0 +1,14 @@
+{
+  "coverage_options": {
+    "minimum_coverage": 100
+  },
+  "skip_files": [
+    "lib/web/application.ex",
+    "lib/web/endpoint.ex",
+    "lib/web/gettext.ex",
+    "lib/web/router.ex",
+    "lib/web/telemetry.ex",
+    "lib/core/application.ex",
+    "lib/core/auth/jwks_cache/http_fetcher.ex"
+  ]
+}

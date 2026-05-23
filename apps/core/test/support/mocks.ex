@@ -1,0 +1,6 @@
+Mox.defmock(Core.Auth.JwksCache.HttpFetcherMock, for: Core.Auth.JwksCache.HttpFetcher)
+Mox.defmock(Core.Auth.JwksCacheMock, for: Core.Auth.JwksCache)
+Mox.defmock(Core.Auth.SessionTokenMock, for: Core.Auth.SessionToken)
+Mox.defmock(Core.Auth.Auth0VerifierMock, for: Core.Auth.Auth0Verifier)
+Mox.defmock(Core.Auth.ManagementApi.HttpClientMock, for: Core.Auth.ManagementApi.HttpClient)
+Mox.defmock(Core.Auth.ManagementApiMock, for: Core.Auth.ManagementApi)
