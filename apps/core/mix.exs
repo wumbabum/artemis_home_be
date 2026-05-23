@@ -36,6 +36,8 @@ defmodule Core.MixProject do
       {:req, "~> 0.5"},
       {:joken, "~> 2.6"},
       {:jason, "~> 1.4"},
+      {:ecto_sql, "~> 3.13"},
+      {:postgrex, "~> 0.20"},
       # Test
       {:mox, "~> 1.1", only: :test},
       {:stream_data, "~> 1.0", only: [:dev, :test]},
