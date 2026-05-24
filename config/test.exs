@@ -27,6 +27,7 @@ config :core, :management_api_http_client, Core.Auth.ManagementApi.HttpClientMoc
 config :core, :auth0_verifier, Core.Auth.Auth0VerifierMock
 config :core, :session_token, Core.Auth.SessionTokenMock
 config :core, :management_api, Core.Auth.ManagementApiMock
+config :core, :ha_rest_client, Core.HA.RestClientMock
 
 # Test defaults for env-driven settings normally provided at runtime.
 config :core,
@@ -35,6 +36,8 @@ config :core,
   auth0_audience: "https://artemis.app/api",
   auth0_m2m_client_id: "test_m2m_client_id",
   auth0_m2m_client_secret: "test_m2m_client_secret",
-  seed_admin_auth0_sub: "google-oauth2|test-admin-sub"
+  seed_admin_auth0_sub: "google-oauth2|test-admin-sub",
+  ha_base_url: "http://homeassistant.test/api",
+  ha_token: "test_ha_token"
 
 config :web, :cors_allowed_origins, ["http://localhost:6587"]

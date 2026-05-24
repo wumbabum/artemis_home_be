@@ -12,13 +12,18 @@ case config_env() do
   :dev ->
     # Dev is forgiving: anything missing falls back to a value that lets
     # `iex -S mix` and `mix phx.server` work without ceremony.
+    # HA_BASE_URL / HA_TOKEN fall back to the existing direnv aliases
+    # (HOME_ASSISTANT_URL / HOME_ASSISTANT_API_KEY) so SB12's renaming
+    # is non-breaking for dev workflows.
     config :core,
       home_id: System.get_env("HOME_ID", "alpha"),
       auth0_domain: System.get_env("AUTH0_DOMAIN"),
       auth0_audience: System.get_env("AUTH0_AUDIENCE", "https://artemis.app/api"),
       auth0_m2m_client_id: System.get_env("AUTH0_M2M_CLIENT_ID"),
       auth0_m2m_client_secret: System.get_env("AUTH0_M2M_CLIENT_SECRET"),
-      seed_admin_auth0_sub: System.get_env("SEED_ADMIN_AUTH0_SUB")
+      seed_admin_auth0_sub: System.get_env("SEED_ADMIN_AUTH0_SUB"),
+      ha_base_url: System.get_env("HA_BASE_URL") || System.get_env("HOME_ASSISTANT_URL"),
+      ha_token: System.get_env("HA_TOKEN") || System.get_env("HOME_ASSISTANT_API_KEY")
 
     port = "PORT" |> System.get_env("6565") |> String.to_integer()
     config :web, Web.Endpoint, http: [port: port]
@@ -47,7 +52,9 @@ case config_env() do
       auth0_m2m_client_id: System.fetch_env!("AUTH0_M2M_CLIENT_ID"),
       auth0_m2m_client_secret: System.fetch_env!("AUTH0_M2M_CLIENT_SECRET"),
       # Optional in prod — only the first-user-bootstrap path needs this.
-      seed_admin_auth0_sub: System.get_env("SEED_ADMIN_AUTH0_SUB")
+      seed_admin_auth0_sub: System.get_env("SEED_ADMIN_AUTH0_SUB"),
+      ha_base_url: System.fetch_env!("HA_BASE_URL"),
+      ha_token: System.fetch_env!("HA_TOKEN")
 
     port = "PORT" |> System.get_env("6565") |> String.to_integer()
 

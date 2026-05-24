@@ -6,6 +6,7 @@
     "lib/core/application.ex",
     "lib/core/auth/jwks_cache/http_fetcher.ex",
     "lib/core/auth/management_api/http_client.ex",
+    "lib/core/ha/rest_client/http_fetcher.ex",
     "lib/core/repo.ex",
     "lib/mix/tasks/seed_homes.ex",
     "test/support/"
