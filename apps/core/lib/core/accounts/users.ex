@@ -34,14 +34,20 @@ defmodule Core.Accounts.Users do
   def upsert_from_auth0(attrs) when is_map(attrs) do
     attrs = normalize_attrs(attrs)
 
-    case get_user_by_auth0_sub(attrs[:auth0_sub]) do
-      nil ->
-        attrs
-        |> Map.put(:role_id, determine_role_id_for_new_user(attrs[:auth0_sub]))
-        |> create_user()
+    result =
+      case get_user_by_auth0_sub(attrs[:auth0_sub]) do
+        nil ->
+          attrs
+          |> Map.put(:role_id, determine_role_id_for_new_user(attrs[:auth0_sub]))
+          |> create_user()
 
-      %User{} = user ->
-        update_user_profile(user, attrs)
+        %User{} = user ->
+          update_user_profile(user, attrs)
+      end
+
+    case result do
+      {:ok, user} -> {:ok, Repo.preload(user, :role)}
+      error -> error
     end
   end
 

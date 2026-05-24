@@ -19,7 +19,7 @@ defmodule Web.Plugs.RequireSessionTest do
   describe "valid bearer token" do
     test "assigns current_user from verified claims and does not halt", %{conn: conn} do
       stub(SessionTokenMock, :verify, fn "valid.session.jwt" ->
-        {:ok, %{"sub" => "google-oauth2|abc", "home_id" => "alpha"}}
+        {:ok, %{"sub" => "google-oauth2|abc", "home_id" => "alpha", "role" => "admin"}}
       end)
 
       conn =
@@ -29,7 +29,8 @@ defmodule Web.Plugs.RequireSessionTest do
 
       assert conn.assigns.current_user == %{
                user_sub: "google-oauth2|abc",
-               home_id: "alpha"
+               home_id: "alpha",
+               role: "admin"
              }
 
       refute conn.halted
@@ -41,6 +42,7 @@ defmodule Web.Plugs.RequireSessionTest do
          %{
            "sub" => "google-oauth2|abc",
            "home_id" => "alpha",
+           "role" => "guest",
            "iat" => 1_700_000_000,
            "exp" => 1_700_003_600,
            "extra" => "ignored"
@@ -54,7 +56,8 @@ defmodule Web.Plugs.RequireSessionTest do
 
       assert conn.assigns.current_user == %{
                user_sub: "google-oauth2|abc",
-               home_id: "alpha"
+               home_id: "alpha",
+               role: "guest"
              }
     end
   end
@@ -111,7 +114,9 @@ defmodule Web.Plugs.RequireSessionTest do
 
   describe "claims missing required fields" do
     test "returns 401 when sub is missing", %{conn: conn} do
-      stub(SessionTokenMock, :verify, fn _ -> {:ok, %{"home_id" => "alpha"}} end)
+      stub(SessionTokenMock, :verify, fn _ ->
+        {:ok, %{"home_id" => "alpha", "role" => "admin"}}
+      end)
 
       conn =
         conn
@@ -122,7 +127,22 @@ defmodule Web.Plugs.RequireSessionTest do
     end
 
     test "returns 401 when home_id is missing", %{conn: conn} do
-      stub(SessionTokenMock, :verify, fn _ -> {:ok, %{"sub" => "google-oauth2|abc"}} end)
+      stub(SessionTokenMock, :verify, fn _ ->
+        {:ok, %{"sub" => "google-oauth2|abc", "role" => "admin"}}
+      end)
+
+      conn =
+        conn
+        |> put_req_header("authorization", "Bearer valid.token")
+        |> RequireSession.call([])
+
+      assert_unauthorized(conn)
+    end
+
+    test "returns 401 when role is missing (v0 session JWT)", %{conn: conn} do
+      stub(SessionTokenMock, :verify, fn _ ->
+        {:ok, %{"sub" => "google-oauth2|abc", "home_id" => "alpha"}}
+      end)
 
       conn =
         conn
@@ -134,7 +154,7 @@ defmodule Web.Plugs.RequireSessionTest do
 
     test "returns 401 when sub or home_id is not a binary", %{conn: conn} do
       stub(SessionTokenMock, :verify, fn _ ->
-        {:ok, %{"sub" => "google-oauth2|abc", "home_id" => 42}}
+        {:ok, %{"sub" => "google-oauth2|abc", "home_id" => 42, "role" => "admin"}}
       end)
 
       conn =

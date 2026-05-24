@@ -13,7 +13,7 @@ defmodule Web.AdminControllerTest do
     # All admin routes go through the :authenticated pipeline, which
     # routes the bearer token through Core.Auth.verify_session.
     stub(SessionTokenMock, :verify, fn "valid.session.jwt" ->
-      {:ok, %{"sub" => "google-oauth2|abc", "home_id" => "test_home"}}
+      {:ok, %{"sub" => "google-oauth2|abc", "home_id" => "test_home", "role" => "admin"}}
     end)
 
     conn =

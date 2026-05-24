@@ -11,7 +11,7 @@ defmodule Web.MeControllerTest do
   describe "GET /api/me/ping" do
     test "returns user_sub, home_id, and admin role for a valid session", %{conn: conn} do
       stub(SessionTokenMock, :verify, fn "valid.session.jwt" ->
-        {:ok, %{"sub" => "google-oauth2|abc", "home_id" => "test_home"}}
+        {:ok, %{"sub" => "google-oauth2|abc", "home_id" => "test_home", "role" => "admin"}}
       end)
 
       conn =

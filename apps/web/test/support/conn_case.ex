@@ -17,6 +17,8 @@ defmodule Web.ConnCase do
 
   use ExUnit.CaseTemplate
 
+  alias Ecto.Adapters.SQL.Sandbox
+
   using do
     quote do
       # The default endpoint for testing
@@ -31,7 +33,10 @@ defmodule Web.ConnCase do
     end
   end
 
-  setup _tags do
+  setup tags do
+    pid = Sandbox.start_owner!(Core.Repo, shared: not tags[:async])
+    on_exit(fn -> Sandbox.stop_owner(pid) end)
+
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end
