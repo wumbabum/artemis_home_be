@@ -17,7 +17,8 @@ case config_env() do
       auth0_domain: System.get_env("AUTH0_DOMAIN"),
       auth0_audience: System.get_env("AUTH0_AUDIENCE", "https://artemis.app/api"),
       auth0_m2m_client_id: System.get_env("AUTH0_M2M_CLIENT_ID"),
-      auth0_m2m_client_secret: System.get_env("AUTH0_M2M_CLIENT_SECRET")
+      auth0_m2m_client_secret: System.get_env("AUTH0_M2M_CLIENT_SECRET"),
+      seed_admin_auth0_sub: System.get_env("SEED_ADMIN_AUTH0_SUB")
 
     port = "PORT" |> System.get_env("6565") |> String.to_integer()
     config :web, Web.Endpoint, http: [port: port]
@@ -44,7 +45,9 @@ case config_env() do
       auth0_domain: System.fetch_env!("AUTH0_DOMAIN"),
       auth0_audience: System.fetch_env!("AUTH0_AUDIENCE"),
       auth0_m2m_client_id: System.fetch_env!("AUTH0_M2M_CLIENT_ID"),
-      auth0_m2m_client_secret: System.fetch_env!("AUTH0_M2M_CLIENT_SECRET")
+      auth0_m2m_client_secret: System.fetch_env!("AUTH0_M2M_CLIENT_SECRET"),
+      # Optional in prod — only the first-user-bootstrap path needs this.
+      seed_admin_auth0_sub: System.get_env("SEED_ADMIN_AUTH0_SUB")
 
     port = "PORT" |> System.get_env("6565") |> String.to_integer()
 
