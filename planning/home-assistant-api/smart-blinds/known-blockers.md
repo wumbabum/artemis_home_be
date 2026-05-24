@@ -1,5 +1,16 @@
 # Known blockers — Z-Wave radio offline
 
+> **RESOLVED 2026-05-24.** Z-Wave radio is back online; all three
+> cover entities report a real state with `current_position`. The
+> pending captures `04-get-state-available.md`,
+> `05-set-position-response.md`, and `06-state-during-transition.md`
+> have been written from live data. SB-α smoke pause cleared
+> (read + write paths both verified end-to-end). Sections below are
+> retained as a historical record of the diagnostic process; treat
+> them as archival, not active.
+
+## Original report
+
 At the time of capture, every Z-Wave-derived entity reports
 `state: "unavailable"` with `restored: true` (where applicable).
 
@@ -95,14 +106,32 @@ Recommendation: get Z-Wave back online before starting commit B-α (the
 HA client smoke test). All commits before B-α are safe to land without
 working hardware.
 
-## After recovery — captures to fill in
+## After recovery — captures filled in
 
-When Z-Wave is back:
+All three pending captures are now written from live data against the
+recovered radio:
 
-- `04-get-state-available.md` — `GET /states/cover.<entity>` with
-  populated `current_position`.
-- `05-set-position-response.md` — the response body shape from
-  `POST /services/cover/set_cover_position`.
-- `06-state-during-transition.md` — repeated `GET /states/<entity>`
-  immediately after a set_position to capture `opening`/`closing`
-  states and intermediate `current_position` values.
+- `04-get-state-available.md` ✓
+- `05-set-position-response.md` ✓
+- `06-state-during-transition.md` ✓
+
+Key findings that emerged from the live captures and that the
+implementation must account for:
+
+- `set_cover_position` does **not** flip `state` to `"opening"` /
+  `"closing"` — only the explicit `open_cover` / `close_cover`
+  services do. Position-only moves change `current_position` and
+  `last_updated`; `state` and `last_changed` are unchanged.
+- Z-Wave round-trip latency from "service accepted" to "HA reflects
+  the new position" is **6–10 seconds**. The 1s adaptive cadence
+  planned for `Core.Blinds.StateCache` should keep polling at the
+  short interval for the full window, not just one tick.
+- HA returns an empty array `[]` for `set_cover_position` success
+  but returns the affected state(s) inline for `open_cover` /
+  `close_cover`. Treat the body as semantically empty across the
+  board; always re-poll.
+- Cover groups (e.g. `cover.living_room_blinds`) appear in service
+  responses for any move that affects a member entity. The BE only
+  tracks the three individual `cover.*` entities and can ignore the
+  group entity in the StateCache filter (its `attributes.entity_id`
+  is a list, which is a useful disambiguator).
