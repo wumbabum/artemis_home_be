@@ -70,7 +70,9 @@ defmodule ArtemisHomeBe.MixProject do
       ],
       # Convenience alias so the task can be invoked with the dotted name
       # `mix seed.homes` in addition to the underscored `mix seed_homes`.
-      "seed.homes": "seed_homes"
+      "seed.homes": "seed_homes",
+      # Same convenience for the blinds seeder (`mix seed.blinds`).
+      "seed.blinds": "seed_blinds"
     ]
   end
 end
