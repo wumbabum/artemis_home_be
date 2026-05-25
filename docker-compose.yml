@@ -16,6 +16,8 @@ services:
   artemis_home_be:
     image: ${DOCKER_USERNAME:?DOCKER_USERNAME must be set}/artemis_home_be:${ARTEMIS_VERSION:-latest}
     container_name: artemis_home_be
+    depends_on:
+      - db
     environment:
       # Required — fetch_env! in :prod will also fail container boot if missing.
       - HOME_ID=${HOME_ID:?HOME_ID must be set}
@@ -25,8 +27,13 @@ services:
       - AUTH0_M2M_CLIENT_ID=${AUTH0_M2M_CLIENT_ID:?AUTH0_M2M_CLIENT_ID must be set}
       - AUTH0_M2M_CLIENT_SECRET=${AUTH0_M2M_CLIENT_SECRET:?AUTH0_M2M_CLIENT_SECRET must be set}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS must be set (comma-separated FE origins)}
+      - HA_BASE_URL=${HA_BASE_URL:?HA_BASE_URL must be set (include /api suffix)}
+      - HA_TOKEN=${HA_TOKEN:?HA_TOKEN must be set (HA long-lived access token)}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL must be set (postgres://user:pass@db:5432/dbname)}
       # Optional with defaults.
       - AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-https://artemis.app/api}
+      - SEED_ADMIN_AUTH0_SUB=${SEED_ADMIN_AUTH0_SUB:-}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
       - TZ=${TZ:-UTC}
       - PORT=6565
     ports:
@@ -39,3 +46,19 @@ services:
       # becomes invalid.
       - ${KEYS_PATH:-./keys}:/app/apps/core/priv/keys
     restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: artemis_home_db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:?POSTGRES_USER must be set}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      - POSTGRES_DB=${POSTGRES_DB:?POSTGRES_DB must be set}
+    volumes:
+      # Named volume keeps DB state across container recreates. Backups are
+      # the operator's responsibility — see the deploy runbook.
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
