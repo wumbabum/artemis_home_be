@@ -351,4 +351,42 @@ defmodule Core.Blinds.StateCacheTest do
       assert {:ok, %{position: 65}} = StateCache.get_state("cover.left", cache)
     end
   end
+
+  describe "schedule_refresh_after/2" do
+    test "fires a poll within the given window even in manual mode" do
+      test_pid = self()
+
+      stub(RestClientMock, :list_states, fn ->
+        send(test_pid, :polled)
+        {:ok, [ha_entity("cover.left", "open", 65)]}
+      end)
+
+      cache = start_cache!("sched_manual", poll_interval_ms: :manual)
+
+      :ok = StateCache.schedule_refresh_after(50, cache)
+
+      assert_receive :polled, 500
+      assert {:ok, %{position: 65}} = StateCache.get_state("cover.left", cache)
+    end
+
+    test "cancels a pending scheduled poll and replaces it" do
+      test_pid = self()
+
+      stub(RestClientMock, :list_states, fn ->
+        send(test_pid, :polled)
+        {:ok, []}
+      end)
+
+      # 5s default cadence: the natural tick will not fire during the
+      # test window. We schedule a short refresh and assert only one
+      # poll happens within 500ms (the one we asked for, not the
+      # cancelled-and-replaced 5s one).
+      cache = start_cache!("sched_cancels", poll_interval_ms: 5_000)
+
+      :ok = StateCache.schedule_refresh_after(50, cache)
+      assert_receive :polled, 500
+
+      refute_receive :polled, 200
+    end
+  end
 end

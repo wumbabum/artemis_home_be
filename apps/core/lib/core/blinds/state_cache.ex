@@ -94,6 +94,26 @@ defmodule Core.Blinds.StateCache do
     GenServer.call(name, :refresh)
   end
 
+  @doc """
+  Cancels any pending scheduled poll and queues a fresh poll for `ms`
+  from now. After that poll fires the cache returns to its default
+  cadence (or to no further polls if it was configured with
+  `:poll_interval_ms` of `:manual` / `0`).
+
+  Used by the write-side blinds API (`Core.Blinds.open/1`,
+  `close/1`, `stop/1`, `set_position/2`) so the cache picks up the
+  new state shortly after a service call without waiting for the
+  next regular tick. The Z-Wave round-trip from "service accepted"
+  to "HA reflects the new position" is ~6–10 s; the steady-state
+  cadence resumes after the first post-write poll and continues to
+  surface the new state within at most one further cycle.
+  """
+  @spec schedule_refresh_after(non_neg_integer(), atom()) :: :ok
+  def schedule_refresh_after(ms, name \\ @default_name)
+      when is_integer(ms) and ms >= 0 do
+    GenServer.cast(name, {:schedule_refresh_after, ms})
+  end
+
   ## GenServer callbacks
 
   @impl true
@@ -124,6 +144,13 @@ defmodule Core.Blinds.StateCache do
   def handle_call(:refresh, _from, state) do
     new_state = state |> cancel_timer() |> do_poll() |> schedule_next_poll()
     {:reply, :ok, new_state}
+  end
+
+  @impl true
+  def handle_cast({:schedule_refresh_after, ms}, state) do
+    state = cancel_timer(state)
+    timer_ref = Process.send_after(self(), :poll, ms)
+    {:noreply, %{state | timer_ref: timer_ref}}
   end
 
   @impl true
