@@ -29,6 +29,11 @@ config :core, :session_token, Core.Auth.SessionTokenMock
 config :core, :management_api, Core.Auth.ManagementApiMock
 config :core, :ha_rest_client, Core.HA.RestClientMock
 
+# Tests own the StateCache lifecycle explicitly via `start_supervised!`
+# with isolated names. The supervisor-started default would collide
+# on the `:cover_state` ETS table.
+config :core, :start_state_cache, false
+
 # Test defaults for env-driven settings normally provided at runtime.
 config :core,
   home_id: "test_home",
