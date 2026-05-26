@@ -86,12 +86,14 @@ Observations:
 
 ## Edge case: a write *during* an in-flight move
 
-Not captured in this session (would require firing a second command
-mid-flight from one terminal while polling from another). Documented
-HA behaviour is that the second command supersedes the first — the
-motor reverses or accelerates to the new target — and the eventual
-position report reflects the second target. Verification deferred to
-SB-γ end-to-end testing.
+Captured live in `08-write-during-in-flight-move.md`. Summary: the
+second command supersedes the first, the blind never visits the
+first target, and HA reports only the final settled position
+(`current_position` changes exactly once). Total settle time is
+~12 s when the motor has to reverse mid-flight (vs ~7 s for a
+single move). Both POSTs return the same `200 []` HA gives for any
+successful service call; no warning that the prior command was
+superseded.
 
 ## Settled-final-state shape
 

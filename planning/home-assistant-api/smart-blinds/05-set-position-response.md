@@ -113,16 +113,21 @@ Notes:
   next move. The BE must not compare the requested position to the
   achieved one as a success/failure signal.
 
-## Error shapes (not yet captured)
+## Error shapes
 
-The plan still needs captures for:
+The error and edge-case response shapes that were originally deferred
+from this file are now captured in their own document:
 
-- A service call against an unavailable entity (`{:error, {:ha_status,
-  ..., body}}`) — out of scope until we have a way to take just one
-  blind offline without breaking the other.
-- A malformed body (`position: 200`) — the JSON schema check in
-  `03-cover-services-schema.md` says HA enforces `min: 0, max: 100`,
-  but the actual rejection shape is uncaptured. v0.1 enforces the
-  range in `Core.Blinds.set_position/2` before calling HA, so this
-  error path is unreachable through the BE's HTTP surface and is
-  deferred.
+- Out-of-range / non-numeric / missing `position` —
+  `07-service-call-errors.md` §Scenarios C–E. All produce **HTTP 400**
+  with a **plain-text** body `"400: Bad Request"` (not JSON).
+- Nonexistent or wrong-domain `entity_id` —
+  `07-service-call-errors.md` §Scenarios A–B. Both produce **HTTP 200**
+  with body `[]`; HA silently drops non-matching targets.
+- Float `position` (e.g. 50.5) — `07-service-call-errors.md`
+  §Scenario F. HA accepts and the motor moves; v0.1's BE rejects this
+  at the integer guard before reaching HA.
+- Service call against an unavailable cover entity —
+  `07-service-call-errors.md` §Scenario G discusses substitutes; a
+  true unavailable-cover capture still requires power-cycling a
+  SmartWings blind and is deferred.
