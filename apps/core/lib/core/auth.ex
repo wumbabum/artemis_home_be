@@ -11,12 +11,23 @@ defmodule Core.Auth do
     * `:management_api`      — defaults to `Core.Auth.ManagementApi`
   """
 
+  alias Core.Accounts.User
+  alias Core.Accounts.Users
   alias Core.Auth.Auth0Verifier
   alias Core.Auth.ManagementApi
   alias Core.Auth.SessionToken
 
   @doc """
-  Verifies an Auth0 access token and issues this BE's session JWT.
+  Verifies an Auth0 access token, upserts the user row from the
+  verified claims, and issues this BE's session JWT carrying the
+  user's role.
+
+  Email / name / picture come from the Auth0 access token if the
+  corresponding standard OIDC claims are present. If they are not,
+  the BE falls back to derived values (`<sub>@unknown.local`,
+  `<sub>`, `nil`) so the user row can be created on first login. To
+  surface real profile data, configure a Post-Login Action to inject
+  the OIDC claims onto the access token.
 
   On success returns the verified `user_sub`, the requested `home_id`
   (echoed for convenience), and the freshly minted session JWT.
@@ -27,9 +38,13 @@ defmodule Core.Auth do
   def exchange_auth0_token(token, home_id) when is_binary(token) and is_binary(home_id) do
     with {:ok, claims} <- verifier().verify(token),
          {:ok, user_sub} <- fetch_sub(claims),
+         {:ok, %User{} = user} <- Users.upsert_from_auth0(user_attrs_from_claims(claims)),
          {:ok, session_jwt} <-
-           session_token().issue(build_session_claims(user_sub, home_id)) do
+           session_token().issue(build_session_claims(user, home_id)) do
       {:ok, %{user_sub: user_sub, home_id: home_id, session_jwt: session_jwt}}
+    else
+      {:error, %Ecto.Changeset{}} -> {:error, :user_upsert_failed}
+      other -> other
     end
   end
 
@@ -64,9 +79,20 @@ defmodule Core.Auth do
   defp fetch_sub(%{"sub" => sub}) when is_binary(sub), do: {:ok, sub}
   defp fetch_sub(_claims), do: {:error, :missing_sub_claim}
 
-  defp build_session_claims(user_sub, home_id) do
+  defp user_attrs_from_claims(claims) do
+    sub = claims["sub"]
+
+    %{
+      auth0_sub: sub,
+      email: claims["email"] || "#{sub}@unknown.local",
+      name: claims["name"] || sub,
+      picture: claims["picture"]
+    }
+  end
+
+  defp build_session_claims(%User{auth0_sub: sub, role: role}, home_id) do
     now = System.system_time(:second)
-    %{"sub" => user_sub, "home_id" => home_id, "iat" => now}
+    %{"sub" => sub, "home_id" => home_id, "role" => role.name, "iat" => now}
   end
 
   defp upsert_home(homes, home_id, url) do

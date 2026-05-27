@@ -14,3 +14,7 @@ end
 unless Code.ensure_loaded?(Core.Auth.ManagementApiMock) do
   Mox.defmock(Core.Auth.ManagementApiMock, for: Core.Auth.ManagementApi)
 end
+
+unless Code.ensure_loaded?(Core.HA.RestClientMock) do
+  Mox.defmock(Core.HA.RestClientMock, for: Core.HA.RestClient)
+end

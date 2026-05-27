@@ -8,6 +8,7 @@ defmodule Core.MixProject do
       build_path: "../../_build",
       config_path: "../../config/config.exs",
       deps_path: "../../deps",
+      listeners: [Phoenix.CodeReloader],
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -36,6 +37,8 @@ defmodule Core.MixProject do
       {:req, "~> 0.5"},
       {:joken, "~> 2.6"},
       {:jason, "~> 1.4"},
+      {:ecto_sql, "~> 3.13"},
+      {:postgrex, "~> 0.20"},
       # Test
       {:mox, "~> 1.1", only: :test},
       {:stream_data, "~> 1.0", only: [:dev, :test]},

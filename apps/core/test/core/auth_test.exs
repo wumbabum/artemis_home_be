@@ -3,23 +3,38 @@ defmodule Core.AuthTest do
 
   import Mox
 
+  alias Core.Accounts.Users
   alias Core.Auth
   alias Core.Auth.Auth0VerifierMock
   alias Core.Auth.ManagementApiMock
   alias Core.Auth.SessionTokenMock
+  alias Core.Repo
+  alias Ecto.Adapters.SQL.Sandbox
 
   setup :set_mox_global
   setup :verify_on_exit!
 
+  setup do
+    :ok = Sandbox.checkout(Repo)
+  end
+
   describe "exchange_auth0_token/2 happy path" do
-    test "verifies the Auth0 token, issues a session JWT, and echoes user_sub + home_id" do
+    test "verifies the token, upserts the user, and issues a session JWT carrying the role" do
       stub(Auth0VerifierMock, :verify, fn "auth0_access_token" ->
-        {:ok, %{"sub" => "auth0|user-1", "aud" => "https://artemis.app/api"}}
+        {:ok,
+         %{
+           "sub" => "auth0|user-1",
+           "email" => "user@example.com",
+           "name" => "User One",
+           "picture" => "https://cdn.example.com/u1.png",
+           "aud" => "https://artemis.app/api"
+         }}
       end)
 
       stub(SessionTokenMock, :issue, fn claims ->
         assert claims["sub"] == "auth0|user-1"
         assert claims["home_id"] == "alpha"
+        assert claims["role"] == "guest"
         assert is_integer(claims["iat"])
         {:ok, "session.jwt.value"}
       end)
@@ -30,6 +45,29 @@ defmodule Core.AuthTest do
                 home_id: "alpha",
                 session_jwt: "session.jwt.value"
               }} = Auth.exchange_auth0_token("auth0_access_token", "alpha")
+
+      user = Users.get_user_by_auth0_sub("auth0|user-1")
+      assert user.email == "user@example.com"
+      assert user.name == "User One"
+      assert user.picture == "https://cdn.example.com/u1.png"
+    end
+
+    test "falls back to derived email/name when the access token omits OIDC claims" do
+      stub(Auth0VerifierMock, :verify, fn _token ->
+        {:ok, %{"sub" => "auth0|user-2", "aud" => "https://artemis.app/api"}}
+      end)
+
+      stub(SessionTokenMock, :issue, fn claims ->
+        assert claims["role"] == "guest"
+        {:ok, "session.jwt.value"}
+      end)
+
+      assert {:ok, _} = Auth.exchange_auth0_token("auth0_access_token", "alpha")
+
+      user = Users.get_user_by_auth0_sub("auth0|user-2")
+      assert user.email == "auth0|user-2@unknown.local"
+      assert user.name == "auth0|user-2"
+      assert user.picture == nil
     end
   end
 
@@ -52,12 +90,37 @@ defmodule Core.AuthTest do
 
     test "propagates SessionToken.issue failures" do
       stub(Auth0VerifierMock, :verify, fn _token ->
-        {:ok, %{"sub" => "auth0|user-1"}}
+        {:ok,
+         %{
+           "sub" => "auth0|user-3",
+           "email" => "u3@example.com",
+           "name" => "User Three"
+         }}
       end)
 
       stub(SessionTokenMock, :issue, fn _claims -> {:error, :signing_key_unavailable} end)
 
       assert {:error, :signing_key_unavailable} =
+               Auth.exchange_auth0_token("auth0_access_token", "alpha")
+    end
+
+    test "returns :user_upsert_failed when the changeset is invalid" do
+      # Name longer than the schema's 255-char cap forces the changeset
+      # to fail validation, exercising the changeset-error branch.
+      stub(Auth0VerifierMock, :verify, fn _token ->
+        {:ok,
+         %{
+           "sub" => "auth0|user-4",
+           "email" => "u4@example.com",
+           "name" => String.duplicate("a", 300)
+         }}
+      end)
+
+      stub(SessionTokenMock, :issue, fn _claims ->
+        flunk("SessionToken.issue should not be called when upsert fails")
+      end)
+
+      assert {:error, :user_upsert_failed} =
                Auth.exchange_auth0_token("auth0_access_token", "alpha")
     end
   end

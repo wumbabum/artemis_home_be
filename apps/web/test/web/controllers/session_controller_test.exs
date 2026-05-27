@@ -15,6 +15,8 @@ defmodule Web.SessionControllerTest do
         {:ok,
          %{
            "sub" => "google-oauth2|abc",
+           "email" => "abc@example.com",
+           "name" => "Abc User",
            "iss" => "https://test.auth0.com/",
            "aud" => "https://artemis.app/api",
            "https://artemis.app/homes" => [%{"home_id" => "test_home"}]
@@ -24,6 +26,7 @@ defmodule Web.SessionControllerTest do
       stub(SessionTokenMock, :issue, fn claims ->
         assert claims["sub"] == "google-oauth2|abc"
         assert claims["home_id"] == "test_home"
+        assert claims["role"] == "guest"
         {:ok, "issued.session.jwt"}
       end)
 

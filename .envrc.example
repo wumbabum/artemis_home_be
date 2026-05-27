@@ -33,6 +33,25 @@ export CORS_ALLOWED_ORIGINS="http://localhost:6587,https://artemis-home.fly.dev"
 export HOME_ID="alpha"
 export PORT="6565"
 
+# --- Home Assistant ---
+# Base URL including the /api suffix (e.g. http://homeassistant.local:8123/api).
+# `runtime.exs` also accepts the legacy HOME_ASSISTANT_URL/HOME_ASSISTANT_API_KEY
+# names for compatibility with older direnv configs.
+export HA_BASE_URL=""
+export HA_TOKEN=""
+
+# --- Postgres ---
+# Defaults assume a local Postgres reachable on the unix socket /tmp with
+# the `postgres` superuser and no password. Override DATABASE_URL only if
+# you need a non-default DSN; dev.exs handles the defaults.
+# export DATABASE_URL="postgres://postgres:postgres@localhost/artemis_home_be_dev"
+
+# --- First-admin bootstrap ---
+# When the users table is empty AND your Auth0 sub matches this value,
+# your first login is granted role `admin`. Leave blank if you'd rather
+# promote yourself manually.
+export SEED_ADMIN_AUTH0_SUB=""
+
 # Pasted from Bruno when smoke-testing against the BE. Refresh it any
 # time you re-run the OAuth flow.
 export AUTH0_ACCESS_TOKEN=""

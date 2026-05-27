@@ -30,6 +30,10 @@ apps/*/priv/keys/*.pem
 
 # Local direnv config with secrets. Use .envrc.example as the template.
 /.envrc
+# Editor/sed/cp backup files (`.envrc.bak`, `*.swp`, etc.). Never commit.
+.envrc.*
+!.envrc.example
+*.bak
 
 # Host bind-mount target used by docker-compose for the session signing keys.
 /keys/
