@@ -40,6 +40,7 @@ defmodule Web.HomeControllerTest do
       conn = conn |> authed("admin") |> get(~p"/api/home")
 
       assert json_response(conn, 200) == %{
+               "user_sub" => "google-oauth2|abc",
                "home_id" => "test_home",
                "role" => "admin",
                "integrations" => %{
@@ -53,12 +54,13 @@ defmodule Web.HomeControllerTest do
              }
     end
 
-    test "uses the role from the verified session JWT", %{conn: conn} do
+    test "uses the role and user_sub from the verified session JWT", %{conn: conn} do
       stub(RestClientMock, :list_config_entries, fn _ -> {:ok, [zwave_entry()]} end)
 
       conn = conn |> authed("guest") |> get(~p"/api/home")
 
-      assert %{"role" => "guest"} = json_response(conn, 200)
+      assert %{"role" => "guest", "user_sub" => "google-oauth2|abc"} =
+               json_response(conn, 200)
     end
   end
 
@@ -121,6 +123,7 @@ defmodule Web.HomeControllerTest do
       body = json_response(conn, 200)
 
       # home identity is still returned even when HA is down
+      assert body["user_sub"] == "google-oauth2|abc"
       assert body["home_id"] == "test_home"
       assert body["role"] == "admin"
 

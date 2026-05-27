@@ -15,6 +15,7 @@ defmodule Web.HomeController do
 
       200 OK
       {
+        "user_sub": "google-oauth2|abc",
         "home_id": "alpha",
         "role": "admin",
         "integrations": {
@@ -29,9 +30,14 @@ defmodule Web.HomeController do
 
   Always returns `200` for authenticated requests. HA being
   unreachable does not 5xx the endpoint — the FE still needs the
-  home identity and role even when integration status can't be
-  read. HA-side problems are reflected in
+  home identity, user sub, and role even when integration status
+  can't be read. HA-side problems are reflected in
   `integrations.<name>.available` and `.reason` instead.
+
+  This endpoint subsumes the v0 `/api/me/ping` route, which has
+  been removed. The FE should fetch `/api/home` once per
+  authenticated session to get identity + capabilities in one
+  round trip.
 
   ### `integrations.<name>` fields
 
@@ -56,9 +62,10 @@ defmodule Web.HomeController do
 
   @spec show(Plug.Conn.t(), map()) :: Plug.Conn.t()
   def show(conn, _params) do
-    %{home_id: home_id, role: role} = conn.assigns.current_user
+    %{user_sub: user_sub, home_id: home_id, role: role} = conn.assigns.current_user
 
     json(conn, %{
+      user_sub: user_sub,
       home_id: home_id,
       role: role,
       integrations: %{

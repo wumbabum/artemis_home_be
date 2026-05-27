@@ -24,10 +24,14 @@ The React FE that drives this BE lives in a sibling repo,
 - **v0.1 Smart Blinds** is feature-complete and smoke-verified
   end-to-end against live Home Assistant + Z-Wave + SmartWings
   blinds. See `## v0.1 — Smart Blinds` below.
-- v0 web layer still exposes `POST /api/sessions`, `GET /api/me/ping`,
-  and `POST /api/admin/register-home`.
-- v0.1 adds `GET /api/blinds`, `GET /api/blinds/states`, and
-  `POST /api/blinds/:id/{position,open,close,stop}`.
+- v0 web layer still exposes `POST /api/sessions` and
+  `POST /api/admin/register-home`.
+- v0.1 adds `GET /api/home` (identity + per-integration
+  capabilities), `GET /api/blinds`, `GET /api/blinds/states`,
+  and `POST /api/blinds/:id/{position,open,close,stop}`.
+- v0.1 removes the v0 `GET /api/me/ping` endpoint. `/api/home`
+  is the new session-probe + capabilities endpoint and returns
+  `user_sub`, `home_id`, `role`, and `integrations`.
 - v0.1 changes the single-home model: each BE instance now serves
   exactly one home (no `homes` table, no `home_id` FKs). Multi-home
   remains a frontend concern — the FE fans out across one BE
@@ -244,15 +248,16 @@ With both BE instances running and homes seeded:
 1. Acquire a real Auth0 access token via Bruno (see
    `../artemis_home_fe/temp/bruno.md`) or by capturing one from a
    browser DevTools network panel after login.
-2. Hit each instance to verify the full session-exchange + ping loop:
+2. Hit each instance to verify the full session-exchange + identity
+   loop:
 
    ```bash
    # Exchange Auth0 token → session JWT (against alpha)
    curl -sS -X POST http://localhost:6565/api/sessions \
      -H "Authorization: Bearer $AUTH0_ACCESS_TOKEN" | jq
 
-   # Ping with the returned session JWT
-   curl -sS http://localhost:6565/api/me/ping \
+   # Identity + capabilities probe with the returned session JWT
+   curl -sS http://localhost:6565/api/home \
      -H "Authorization: Bearer $SESSION_JWT" | jq
    ```
 

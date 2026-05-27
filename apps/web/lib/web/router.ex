@@ -25,7 +25,6 @@ defmodule Web.Router do
   scope "/api", Web do
     pipe_through :authenticated
 
-    get "/me/ping", MeController, :ping
     post "/admin/register-home", AdminController, :register_home
 
     get "/home", HomeController, :show
