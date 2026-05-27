@@ -12,13 +12,17 @@ defmodule Core.Blinds do
     2. POSTs the corresponding cover service to HA via the
        configured `Core.HA.RestClient` implementation.
     3. On HA's 2xx, asks `StateCache.schedule_refresh_after/2` to
-       run a poll within `@refresh_after_ms` so the cache reflects
-       the new state quickly. The refresh is fire-and-forget; if
-       the cache isn't running the cast is a no-op.
+       run a poll within `@refresh_after_ms` and to open the
+       cache's post-write fast-poll window. The cache keeps polling
+       at the fast cadence (1 s by default) until the window
+       expires (12 s by default), then returns to steady-state.
+       The refresh is fire-and-forget; if the cache isn't running
+       the cast is a no-op.
 
-  HA's Z-Wave round-trip for SmartWings blinds is ~6–10 s; the FE
-  should surface a pending indicator until the cached
-  `current_position` reflects the requested move.
+  HA's Z-Wave round-trip for SmartWings blinds is ~6–10 s, with
+  superseding mid-flight writes stretching to ~12 s; the FE should
+  surface a pending indicator until the cached `current_position`
+  reflects the requested move.
   """
 
   import Ecto.Query, only: [from: 2]
@@ -27,10 +31,11 @@ defmodule Core.Blinds do
   alias Core.Blinds.StateCache
   alias Core.Repo
 
-  # Adaptive-refresh window after a successful HA service call. Set
-  # so the first post-write poll lands well before the steady-state
-  # 5 s cycle would. See planning/home-assistant-api/smart-blinds/
-  # for the Z-Wave latency profile.
+  # First post-write poll fires this many ms after the HA service
+  # call returns. The StateCache then continues polling at its
+  # fast cadence until its fast-poll window expires. See
+  # planning/home-assistant-api/smart-blinds/ for the Z-Wave
+  # latency profile.
   @refresh_after_ms 1_000
 
   @doc """

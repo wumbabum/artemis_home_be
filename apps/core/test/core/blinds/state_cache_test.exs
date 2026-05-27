@@ -361,11 +361,22 @@ defmodule Core.Blinds.StateCacheTest do
         {:ok, [ha_entity("cover.left", "open", 65)]}
       end)
 
-      cache = start_cache!("sched_manual", poll_interval_ms: :manual)
+      cache =
+        start_cache!("sched_manual",
+          poll_interval_ms: :manual,
+          # Disable the fast window so only the explicit refresh fires.
+          fast_poll_window_ms: 0
+        )
 
       :ok = StateCache.schedule_refresh_after(50, cache)
 
       assert_receive :polled, 500
+      # The stub signals `:polled` before list_states returns to the
+      # cache, so the upsert may not have landed in ETS when this
+      # test process wakes up. A `:sys.get_state/1` round-trip waits
+      # for the in-flight handle_info(:poll, ...) callback to
+      # complete before we inspect the cache.
+      _ = :sys.get_state(cache)
       assert {:ok, %{position: 65}} = StateCache.get_state("cover.left", cache)
     end
 
@@ -378,15 +389,135 @@ defmodule Core.Blinds.StateCacheTest do
       end)
 
       # 5s default cadence: the natural tick will not fire during the
-      # test window. We schedule a short refresh and assert only one
-      # poll happens within 500ms (the one we asked for, not the
-      # cancelled-and-replaced 5s one).
+      # test window. We schedule a short refresh and assert that the
+      # 5s steady-state tick does NOT fire within the 200ms window
+      # after the explicit refresh. The fast-poll window's default 1s
+      # cadence wouldn't fire in that 200ms either, so observing zero
+      # additional polls confirms the cancel-and-replace path.
       cache = start_cache!("sched_cancels", poll_interval_ms: 5_000)
 
       :ok = StateCache.schedule_refresh_after(50, cache)
       assert_receive :polled, 500
 
       refute_receive :polled, 200
+    end
+  end
+
+  describe "fast-poll window" do
+    test "continues polling at the fast cadence while the window is active" do
+      test_pid = self()
+
+      stub(RestClientMock, :list_states, fn ->
+        send(test_pid, :polled)
+        {:ok, [ha_entity("cover.left", "open", 65)]}
+      end)
+
+      # Long steady cadence so any extra polls we observe must come
+      # from the fast-poll window, not from the steady tick.
+      cache =
+        start_cache!("fast_window_active",
+          poll_interval_ms: 10_000,
+          fast_poll_interval_ms: 30,
+          fast_poll_window_ms: 300
+        )
+
+      :ok = StateCache.schedule_refresh_after(10, cache)
+
+      # Initial scheduled poll + at least three more at the fast
+      # cadence before the window expires. Each assert_receive waits
+      # up to 200ms; comfortably more than the 30ms fast cadence.
+      for _ <- 1..4, do: assert_receive(:polled, 200)
+    end
+
+    test "returns to steady-state cadence after the window expires" do
+      test_pid = self()
+
+      stub(RestClientMock, :list_states, fn ->
+        send(test_pid, :polled)
+        {:ok, []}
+      end)
+
+      # Steady cadence is long enough that no steady poll will fire
+      # during the test window. After the fast window expires we
+      # should observe a quiet gap (no further fast polls).
+      cache =
+        start_cache!("fast_window_expires",
+          poll_interval_ms: 5_000,
+          fast_poll_interval_ms: 25,
+          fast_poll_window_ms: 80
+        )
+
+      :ok = StateCache.schedule_refresh_after(10, cache)
+
+      # Drain the fast polls that fire within the window.
+      for _ <- 1..2, do: assert_receive(:polled, 200)
+
+      # Wait past the window edge, drain any stragglers that were
+      # scheduled before the window closed, then assert the fast
+      # cadence has stopped.
+      Process.sleep(150)
+      flush_mailbox(:polled)
+      refute_receive :polled, 300
+    end
+
+    test "stops polling after the window expires when steady-state is :manual" do
+      test_pid = self()
+
+      stub(RestClientMock, :list_states, fn ->
+        send(test_pid, :polled)
+        {:ok, []}
+      end)
+
+      cache =
+        start_cache!("fast_window_manual",
+          poll_interval_ms: :manual,
+          fast_poll_interval_ms: 25,
+          fast_poll_window_ms: 80
+        )
+
+      :ok = StateCache.schedule_refresh_after(10, cache)
+
+      for _ <- 1..2, do: assert_receive(:polled, 200)
+
+      Process.sleep(150)
+      flush_mailbox(:polled)
+      refute_receive :polled, 300
+    end
+
+    test "repeated calls extend the window from the most recent call" do
+      test_pid = self()
+
+      stub(RestClientMock, :list_states, fn ->
+        send(test_pid, :polled)
+        {:ok, []}
+      end)
+
+      cache =
+        start_cache!("fast_window_extend",
+          poll_interval_ms: 5_000,
+          fast_poll_interval_ms: 25,
+          fast_poll_window_ms: 60
+        )
+
+      :ok = StateCache.schedule_refresh_after(10, cache)
+      # Soak some fast polls, then re-arm before the window expires.
+      for _ <- 1..2, do: assert_receive(:polled, 200)
+      :ok = StateCache.schedule_refresh_after(10, cache)
+      # After re-arming we should keep seeing fast polls for another
+      # full window's worth.
+      for _ <- 1..3, do: assert_receive(:polled, 200)
+    end
+  end
+
+  # Drains any pending occurrences of `msg` from the test process
+  # inbox without waiting. Used in fast-window tests to discard
+  # stragglers that were scheduled inside the window but not yet
+  # received by the time we want to assert quiescence.
+  defp flush_mailbox(msg) do
+    receive do
+      ^msg -> flush_mailbox(msg)
+    after
+      0 -> :ok
     end
   end
 end

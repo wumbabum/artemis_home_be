@@ -23,9 +23,20 @@ defmodule Core.Blinds.StateCache do
     * `:name` — GenServer + ETS table name. Defaults to
       `Core.Blinds.StateCache`. Use a unique name per test process to
       avoid collisions.
-    * `:poll_interval_ms` — auto-poll cadence. Defaults to 5_000.
-      Pass `:manual` (or 0) to disable auto-polling — tests use this
-      and drive polls via `refresh_now/1`.
+    * `:poll_interval_ms` — steady-state auto-poll cadence. Defaults
+      to 5_000. Pass `:manual` (or 0) to disable steady-state polling
+      — tests use this and drive polls via `refresh_now/1`.
+    * `:fast_poll_interval_ms` — poll cadence used while the
+      post-write fast window (see `schedule_refresh_after/2`) is
+      active. Defaults to 1_000.
+    * `:fast_poll_window_ms` — how long after a
+      `schedule_refresh_after/2` call the cache keeps polling at the
+      fast cadence before returning to steady-state. Defaults to
+      12_000, which covers HA's ~6–10 s Z-Wave round-trip plus a
+      cushion for the supersede-mid-flight case captured in
+      `planning/home-assistant-api/smart-blinds/08-write-during-in-flight-move.md`.
+      Pass 0 to disable the fast window (one immediate poll then
+      straight back to steady-state).
     * `:stale_after_ms` — duration after which an entry that has
       disappeared from HA's response is marked `available: false`.
       Defaults to 30_000.
@@ -48,6 +59,8 @@ defmodule Core.Blinds.StateCache do
 
   @default_name __MODULE__
   @default_poll_interval_ms 5_000
+  @default_fast_poll_interval_ms 1_000
+  @default_fast_poll_window_ms 12_000
   @default_stale_after_ms 30_000
 
   ## Public API
@@ -96,17 +109,23 @@ defmodule Core.Blinds.StateCache do
 
   @doc """
   Cancels any pending scheduled poll and queues a fresh poll for `ms`
-  from now. After that poll fires the cache returns to its default
-  cadence (or to no further polls if it was configured with
-  `:poll_interval_ms` of `:manual` / `0`).
+  from now. Also opens a "fast-poll window": while the window is
+  active the cache continues polling at `:fast_poll_interval_ms`
+  instead of the steady-state cadence. The window length is
+  `:fast_poll_window_ms` (default 12 s); after it expires polling
+  returns to `:poll_interval_ms` (or stops, if that value is
+  `:manual` / `0`). Repeated calls extend the window from the most
+  recent call.
 
   Used by the write-side blinds API (`Core.Blinds.open/1`,
-  `close/1`, `stop/1`, `set_position/2`) so the cache picks up the
-  new state shortly after a service call without waiting for the
-  next regular tick. The Z-Wave round-trip from "service accepted"
-  to "HA reflects the new position" is ~6–10 s; the steady-state
-  cadence resumes after the first post-write poll and continues to
-  surface the new state within at most one further cycle.
+  `close/1`, `stop/1`, `set_position/2`) so the cache reflects the
+  new state quickly after a service call without waiting for the
+  next steady-state tick. HA's Z-Wave round-trip from "service
+  accepted" to "HA reflects the new position" is ~6–10 s, and a
+  superseding mid-flight write can stretch the settle time to ~12 s
+  (see `planning/home-assistant-api/smart-blinds/08-write-during-in-flight-move.md`),
+  so the default window keeps fast polling alive for the full
+  worst-case settle period.
   """
   @spec schedule_refresh_after(non_neg_integer(), atom()) :: :ok
   def schedule_refresh_after(ms, name \\ @default_name)
@@ -120,6 +139,11 @@ defmodule Core.Blinds.StateCache do
   def init(opts) do
     name = Keyword.get(opts, :name, @default_name)
     poll_interval_ms = Keyword.get(opts, :poll_interval_ms, @default_poll_interval_ms)
+
+    fast_poll_interval_ms =
+      Keyword.get(opts, :fast_poll_interval_ms, @default_fast_poll_interval_ms)
+
+    fast_poll_window_ms = Keyword.get(opts, :fast_poll_window_ms, @default_fast_poll_window_ms)
     stale_after_ms = Keyword.get(opts, :stale_after_ms, @default_stale_after_ms)
 
     ha_client =
@@ -132,9 +156,12 @@ defmodule Core.Blinds.StateCache do
     state = %{
       table: name,
       poll_interval_ms: normalize_interval(poll_interval_ms),
+      fast_poll_interval_ms: fast_poll_interval_ms,
+      fast_poll_window_ms: fast_poll_window_ms,
       stale_after_ms: stale_after_ms,
       ha_client: ha_client,
-      timer_ref: nil
+      timer_ref: nil,
+      fast_until: nil
     }
 
     {:ok, schedule_next_poll(state)}
@@ -149,8 +176,9 @@ defmodule Core.Blinds.StateCache do
   @impl true
   def handle_cast({:schedule_refresh_after, ms}, state) do
     state = cancel_timer(state)
+    fast_until = monotonic_ms() + state.fast_poll_window_ms
     timer_ref = Process.send_after(self(), :poll, ms)
-    {:noreply, %{state | timer_ref: timer_ref}}
+    {:noreply, %{state | timer_ref: timer_ref, fast_until: fast_until}}
   end
 
   @impl true
@@ -228,12 +256,23 @@ defmodule Core.Blinds.StateCache do
     :ok
   end
 
-  defp schedule_next_poll(%{poll_interval_ms: :manual} = state), do: state
-
   defp schedule_next_poll(state) do
-    timer_ref = Process.send_after(self(), :poll, state.poll_interval_ms)
-    %{state | timer_ref: timer_ref}
+    cond do
+      fast_mode_active?(state) ->
+        timer_ref = Process.send_after(self(), :poll, state.fast_poll_interval_ms)
+        %{state | timer_ref: timer_ref}
+
+      state.poll_interval_ms == :manual ->
+        %{state | fast_until: nil}
+
+      true ->
+        timer_ref = Process.send_after(self(), :poll, state.poll_interval_ms)
+        %{state | timer_ref: timer_ref, fast_until: nil}
+    end
   end
+
+  defp fast_mode_active?(%{fast_until: nil}), do: false
+  defp fast_mode_active?(%{fast_until: until_ms}), do: monotonic_ms() < until_ms
 
   defp cancel_timer(%{timer_ref: nil} = state), do: state
 
@@ -247,6 +286,7 @@ defmodule Core.Blinds.StateCache do
   defp normalize_interval(ms) when is_integer(ms) and ms > 0, do: ms
 
   defp monotonic_seconds, do: System.monotonic_time(:second)
+  defp monotonic_ms, do: System.monotonic_time(:millisecond)
 
   defp safe_lookup(name, key) do
     :ets.lookup(name, key)
