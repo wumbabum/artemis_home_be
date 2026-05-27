@@ -28,6 +28,8 @@ defmodule Web.Router do
     get "/me/ping", MeController, :ping
     post "/admin/register-home", AdminController, :register_home
 
+    get "/home", HomeController, :show
+
     get "/blinds", BlindsController, :index
     get "/blinds/states", BlindsController, :states
   end
