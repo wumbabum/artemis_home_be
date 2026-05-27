@@ -31,6 +31,17 @@ defmodule Core.HA.RestClient.HttpFetcher do
     request(:post, "/services/" <> domain <> "/" <> service, body)
   end
 
+  @impl true
+  def list_config_entries(domain) when is_binary(domain) or is_nil(domain) do
+    query =
+      case domain do
+        nil -> ""
+        d -> "?domain=" <> URI.encode_www_form(d)
+      end
+
+    request(:get, "/config/config_entries/entry" <> query, nil)
+  end
+
   defp request(method, path, body) do
     with {:ok, base_url} <- fetch_config(:ha_base_url),
          {:ok, token} <- fetch_config(:ha_token) do
