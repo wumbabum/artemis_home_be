@@ -14,7 +14,8 @@ defmodule ArtemisHomeBe.MixProject do
       dialyzer: [
         plt_add_apps: [:ex_unit, :mix],
         ignore_warnings: ".dialyzer_ignore.exs"
-      ]
+      ],
+      listeners: [Phoenix.CodeReloader]
     ]
   end
 

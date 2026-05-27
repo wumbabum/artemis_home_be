@@ -8,6 +8,7 @@ defmodule Mcp.MixProject do
       build_path: "../../_build",
       config_path: "../../config/config.exs",
       deps_path: "../../deps",
+      listeners: [Phoenix.CodeReloader],
       lockfile: "../../mix.lock",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
